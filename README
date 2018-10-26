@@ -3,3 +3,10 @@ First create netlist for given microcontroller and switch footprint.
 -> need to define usable pins on microcontroller
 Only simple configurations are supported
 Placement of microcontroller and wiring TBD.
+
+link keyboard parts
+ln -s <path-to-parts.pretty> parts.pretty
+
+libraries
+skidl
+scipy
