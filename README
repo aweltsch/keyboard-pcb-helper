@@ -1,0 +1,5 @@
+Tool to create pcbs from keyboard layout editor configurations.
+First create netlist for given microcontroller and switch footprint.
+-> need to define usable pins on microcontroller
+Only simple configurations are supported
+Placement of microcontroller and wiring TBD.
