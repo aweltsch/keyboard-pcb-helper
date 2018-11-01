@@ -7,6 +7,19 @@ Placement of microcontroller and wiring TBD.
 link keyboard parts
 ln -s <path-to-parts.pretty> parts.pretty
 
+Unfortunately, pcbnew is still python2 only, there seems to be some development in kicad to support python3.
 libraries
 skidl
 scipy
+
+Generate netlist from layout
+Import netlist into kicad
+Place components (script, then manual adjustments)
+Add edge cuts
+Wiring
+Generate gerbers
+
+WANT:
+    - Add additional usb port
+    - onboard microcontroller
+    - stabilizer support
