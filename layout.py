@@ -1,3 +1,4 @@
+from __future__ import division
 import json
 from collections import namedtuple
 
@@ -8,11 +9,12 @@ y: in mm
 angle: in radians
 width: multiples of unit size
 """
-Position = namedtuple('Key', ('x', 'y', 'angle', 'width'))
+Position = namedtuple('Position', ('x', 'y', 'angle', 'width'))
 
-def read_layout():
+def read_layout(s):
     """Create a layout from kle raw data string.
 
+    s : (str) kle layout string
     For details on the format see https://github.com/ijprest/keyboard-layout-editor/wiki/Serialized-Data-Format
     Ignores most of the kle attributes.
     s : (str) kle raw data string
@@ -22,6 +24,7 @@ def read_layout():
         'grid': Try to fit a "natural" grid to the keyboard (TODO)
     returns : (Layout)
     """
+    # TODO deal with non-quoted keys
     # ignore optional metadata
     # subsequent rows increment y coordinate by 1
     # each row resets x = 0
@@ -46,14 +49,31 @@ def read_layout():
     for row in l:
         new_row = []
         i = 0
+        cur_x = 0
         while i < len(row):
+            width = 1
+            height = 1
+            x_offset = 0
+            y_offset = 0
             if isinstance(row[i], dict):
+                cfg = row[i]
+                width = cfg.get('w', width)
+                height = cfg.get('h', height)
+                x_offset = cfg.get('x', x_offset)
+                y_offset = cfg.get('y', y_offset)
                 i += 1
 
-            if not isinstance(row[i], str):
+            pos_x = (cur_x + x_offset + width / 2) * UNIT_SIZE
+            pos_y = (cur_y + y_offset + height / 2) * UNIT_SIZE
+            new_row.append(Position(pos_x, pos_y, angle, width))
+            cur_x += x_offset + width
+            cur_y += y_offset
+
+            if not (isinstance(row[i], str) or isinstance(row[i], unicode)):
                 raise Exception("schema error")
 
             i += 1
+        cur_y += 1
 
         if not isinstance(row, list):
             raise Exception("schema error")
