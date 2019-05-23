@@ -1,0 +1,7 @@
+parts.pretty
+components
+*.log
+__pycache__
+*.erc
+venv
+*.pyc
