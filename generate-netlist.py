@@ -55,6 +55,32 @@ def get_key_module(row, col, row_nets, col_nets, key_type='1u'):
     switch[2] += diode[1]
     diode[2] += col_net
 
+def get_micro_controller():
+    return Part('keebio', MICROCONTROLLER_COMPONENT, footprint=MICROCONTROLLER_FOOTPRINT)
+
+SPECIAL_PINS = ['RAW', 'RST', 'GND', 'VCC']
+
+def is_usable_pin(pin):
+    return pin.name not in SPECIAL_PINS
+
+def get_usable_pins(controller):
+    pins = list(filter(is_usable_pin, controller.pins))
+    pins.sort(key=lambda x: x.name) # sort pins by name, so special ones come later
+    return pins
+
+def connect_microcontroller(row_nets, col_nets):
+    controller = get_micro_controller()
+    controller_pins = get_usable_pins(controller)
+    # TODO write pin / (row&col) association to file for automatic generation of qmk config
+
+    if len(controller_pins) < len(row_nets) + len(col_nets):
+        raise Exception("Can not build keyboard schematic," \
+                + "micro controller has not enough available pins." \
+                + "needed: {}, available: {}".format(len(row_nets + col_nets), len(controller_pins)))
+
+    for controller_pin, net in zip(controller_pins, row_nets + col_nets):
+        net += controller_pin
+
 # create nets for all rows & columns
 def main():
     config = parse_args()
@@ -68,4 +94,5 @@ if __name__ == '__main__':
     for i in range(N_ROWS):
         for j in range(N_COLS):
             get_key_module(i, j, row_nets, col_nets)
+    connect_microcontroller(row_nets, col_nets)
     generate_netlist()
