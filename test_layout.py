@@ -69,3 +69,12 @@ def test_layout_to_json():
     layout = Layout(1, 1, [key])
     assert layout.to_json(sort_keys=True) \
             == '{"cols": 1, "keys": [{"angle": 1, "width": 1, "x": 1, "y": 1}], "rows": 1}'
+
+def test_layout_from_json():
+    json_str = '{"cols": 1, "keys": [{"angle": 1, "width": 1, "x": 1, "y": 1}], "rows": 1}'
+    layout = Layout.from_json(json_str)
+
+    expected_key = Position(1, 1, 1, 1)
+    expected_layout = Layout(1, 1, [expected_key])
+
+    assert layout == expected_layout

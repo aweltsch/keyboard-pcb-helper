@@ -143,8 +143,8 @@ class Layout:
         return json.dumps(asdict(self), **args)
 
     @classmethod
-    def from_json(cls, s):
-        json_dict = json.loads(s)
+    def from_json(cls, s, **json_args):
+        json_dict = json.loads(s, **json_args)
         json_dict['keys'] = list(map(lambda x: Position(**x), json_dict.get('keys', [])))
         return cls(**json_dict)
 
