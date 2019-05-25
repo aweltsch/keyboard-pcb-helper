@@ -11,6 +11,32 @@ angle: in radians
 width: multiples of unit size
 """
 
+@dataclass
+class Position:
+    x: float
+    y: float
+    angle: float
+    width: float
+
+
+# want: json output like
+# {"keys": [{row: 0, col: 0, position: {}, ], }
+# make it work, make it pretty, make it fast
+@dataclass
+class Layout:
+    rows: int
+    cols: int
+    keys: List[Position]
+
+    def to_json(self, **args):
+        return json.dumps(asdict(self), **args)
+
+    @classmethod
+    def from_json(cls, s, **json_args):
+        json_dict = json.loads(s, **json_args)
+        json_dict['keys'] = list(map(lambda x: Position(**x), json_dict.get('keys', [])))
+        return cls(**json_dict)
+
 def read_layout(s):
     """Create a layout from kle raw data string.
 
@@ -82,71 +108,6 @@ def read_layout(s):
 
     assert len(rows) == len(l)
     return rows
-
-# want: json output like
-# {"keys": [{row: 0, col: 0, position: {}, ], }
-# make it work, make it pretty, make it fast
-
-def create_layout(rows):
-    keys = []
-    for i, row in enumerate(rows):
-        for j, key in enumerate(row):
-            keys.append({
-                "row": i,
-                "col": j,
-                "position": {},
-                "ref": "K{},{}".format(i,j)
-                })
-
-    layout = {
-            "rows": len(rows),
-            "cols": max(map(len, rows)),
-            "keys": keys
-            }
-    return layout
-
-# FIXME: is this really necessary?
-# there has to be a better way to directly map json to objects & vice versa
-# I don't want to deal with dicts, but have access via regular fields
-#class Layout:
-#    def __init__(self, rows, cols, keys):
-#        self.rows = rows
-#        self.cols = cols
-#        self.keys = list(map(lambda x: Position(**x), keys))
-#
-#    def to_json(self):
-#        self_dict = self.__dict__.copy()
-#
-#        def position_to_json(pos):
-#            return {key: getattr(pos, key) for key in POSITION_ATTRS}
-#
-#        self_dict['keys'] = list(map(position_to_json, self.keys))
-#        return json.dumps(self_dict)
-#
-#def layout_from_json():
-#    pass
-@dataclass
-class Position:
-    x: float
-    y: float
-    angle: float
-    width: float
-
-
-@dataclass
-class Layout:
-    rows: int
-    cols: int
-    keys: List[Position]
-
-    def to_json(self, **args):
-        return json.dumps(asdict(self), **args)
-
-    @classmethod
-    def from_json(cls, s, **json_args):
-        json_dict = json.loads(s, **json_args)
-        json_dict['keys'] = list(map(lambda x: Position(**x), json_dict.get('keys', [])))
-        return cls(**json_dict)
 
 from sys import argv
 if __name__ == '__main__':
