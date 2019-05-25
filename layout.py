@@ -2,6 +2,7 @@ from collections import namedtuple
 from dataclasses import asdict, dataclass
 import json
 import re
+import sys
 from typing import List
 
 UNIT_SIZE = 19.05 # TODO decimal
@@ -39,17 +40,13 @@ class Layout:
         json_dict['keys'] = list(map(lambda x: Position(**x), json_dict.get('keys', [])))
         return cls(**json_dict)
 
-def read_layout(s):
+def read_layout(s: str):
     """Create a layout from kle raw data string.
 
-    s : (str) kle layout string
+    s : (str) a json string that accurately represents a kle string.
+    use kle_to_json function to convert kle strings to this format!
     For details on the format see https://github.com/ijprest/keyboard-layout-editor/wiki/Serialized-Data-Format
     Ignores most of the kle attributes.
-    s : (str) kle raw data string
-    mode : (str) define how columns and rows are assigned, see LayoutMode for details.
-        'default' : Assign rows and columns as they are given via the raw data string
-        'minimize': Try to minimize the number of rows + the number of columns (TODO)
-        'grid': Try to fit a "natural" grid to the keyboard (TODO)
     returns : (Layout)
     """
     # TODO deal with non-quoted keys
@@ -111,6 +108,8 @@ def read_layout(s):
     assert len(rows) == len(l)
     return rows
 
+# FIXME: is this still necessary? downloading from KLE website yields _valid_ json!
+# copy pasting does not!
 def kle_to_json(s: str):
     """Convert keyboard layout editor raw strings to valid json strings.
 
@@ -133,8 +132,37 @@ def kle_to_json(s: str):
 
     return "[{}]".format(escaped_str)
 
-from sys import argv
+def json_to_layout(json_str: str):
+    rows = read_layout(json_str)
+
+    keys = []
+    n_rows = len(rows)
+    n_cols = 0
+
+    for row in rows:
+        if n_cols < len(row):
+            n_cols = len(row)
+        keys.extend(row)
+
+    return Layout(rows=n_rows, cols=n_cols, keys=keys)
+
+def kle_to_layout(s: str):
+    json_str = kle_to_json(s)
+    return json_to_layout(json_str)
+
+def main():
+    # TODO: read string from stdin or from file!
+    if len(sys.argv) < 2:
+        # read from stdin
+        kle_str = sys.stdin.read()
+    else:
+        # read from file
+        f_name = sys.argv[1]
+        with open(f_name) as f:
+            kle_str = f.read()
+
+    layout = json_to_layout(kle_str)
+    print(layout.to_json())
+
 if __name__ == '__main__':
-    # TODO advanced reading!
-    rows = read_layout(s)
-    create_layout(rows)
+    main()

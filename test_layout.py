@@ -84,3 +84,6 @@ def test_kle_to_json():
     assert s == '[{"foo": 1, "bar": 2}]'
     s = kle_to_json('{foo: "bar: 2"}')
     assert s == '[{"foo": "bar: 2"}]'
+
+def test_kle_to_layout():
+    pass
