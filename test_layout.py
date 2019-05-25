@@ -1,4 +1,4 @@
-from layout import Position, read_layout, UNIT_SIZE
+from layout import Position, Layout, read_layout, UNIT_SIZE
 import pytest
 
 easy_layout = '''[
@@ -63,3 +63,9 @@ def test_layout():
     assert_same_layout(layout, sixty_expected)
     layout = read_layout(weird_layout)
     assert_same_layout(layout, weird_expected)
+
+def test_layout_to_json():
+    key = Position(1, 1, 1, 1)
+    layout = Layout(1, 1, [key])
+    assert layout.to_json(sort_keys=True) \
+            == '{"cols": 1, "keys": [{"angle": 1, "width": 1, "x": 1, "y": 1}], "rows": 1}'
