@@ -1,4 +1,4 @@
-from layout import Position, Layout, read_layout, UNIT_SIZE
+from layout import Position, Layout, read_layout, UNIT_SIZE, kle_to_json
 import pytest
 
 easy_layout = '''[
@@ -78,3 +78,9 @@ def test_layout_from_json():
     expected_layout = Layout(1, 1, [expected_key])
 
     assert layout == expected_layout
+
+def test_kle_to_json():
+    s = kle_to_json("{foo: 1, bar: 2}")
+    assert s == '[{"foo": 1, "bar": 2}]'
+    s = kle_to_json('{foo: "bar: 2"}')
+    assert s == '[{"foo": "bar: 2"}]'

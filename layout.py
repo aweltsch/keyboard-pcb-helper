@@ -1,18 +1,20 @@
 from collections import namedtuple
 from dataclasses import asdict, dataclass
 import json
+import re
 from typing import List
 
 UNIT_SIZE = 19.05 # TODO decimal
-"""
-x: in mm
-y: in mm
-angle: in radians
-width: multiples of unit size
-"""
+FIELD_PATTERN = re.compile(r'(\w+):')
 
 @dataclass
 class Position:
+    """
+    x: in mm
+    y: in mm
+    angle: in radians
+    width: multiples of unit size
+    """
     x: float
     y: float
     angle: float
@@ -108,6 +110,28 @@ def read_layout(s):
 
     assert len(rows) == len(l)
     return rows
+
+def kle_to_json(s: str):
+    """Convert keyboard layout editor raw strings to valid json strings.
+
+    KLE raw strings are _not_ valid JSON. This function adds an enclosing array
+    around the row arrays from KLE. Additionally it escapes all member strings
+    in javascript objects.
+    """
+
+    # NOTE: we use an extremely simple string replacement here! This might not
+    # always work, but it's OK for now and should cover most common cases.
+    # TODO: define more resilient transformation
+    # this will lead to problems with strings like {foo: "bar:"}
+    escaped_str = ""
+    while re.search(FIELD_PATTERN, s):
+        match = re.search(FIELD_PATTERN, s)
+        escaped_str += '{}"{}":'.format(s[:match.start()], match[1])
+        s = s[match.end():]
+
+    escaped_str += s
+
+    return "[{}]".format(escaped_str)
 
 from sys import argv
 if __name__ == '__main__':
