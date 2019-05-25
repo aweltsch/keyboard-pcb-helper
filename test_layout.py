@@ -84,3 +84,9 @@ def test_kle_to_json():
     assert s == '[{"foo": 1, "bar": 2}]'
     #s = kle_to_json('{foo: "bar: 2"}')
     #assert s == '[{"foo": "bar: 2"}]'
+
+def test_idempotent_json():
+    key = Key(0, 0, Position(1, 1, 1, 1))
+    layout = Layout(1, 1, [key])
+
+    assert Layout.from_json(layout.to_json()) == layout
