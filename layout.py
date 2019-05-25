@@ -22,6 +22,12 @@ class Position:
     width: float
 
 
+@dataclass
+class Key:
+    row: int
+    col: int
+    position: Position
+
 # want: json output like
 # {"keys": [{row: 0, col: 0, position: {}, ], }
 # make it work, make it pretty, make it fast
@@ -29,7 +35,7 @@ class Position:
 class Layout:
     rows: int
     cols: int
-    keys: List[Position]
+    keys: List[Key]
 
     def to_json(self, **args):
         return json.dumps(asdict(self), **args)
@@ -37,7 +43,15 @@ class Layout:
     @classmethod
     def from_json(cls, s, **json_args):
         json_dict = json.loads(s, **json_args)
-        json_dict['keys'] = list(map(lambda x: Position(**x), json_dict.get('keys', [])))
+
+        # FIXME a little ugly...
+        # maybe we can make this more resilient / generic
+        def to_key(d):
+            res_dict = d.copy()
+            res_dict['position'] = Position(**res_dict['position'])
+            return Key(**res_dict)
+
+        json_dict['keys'] = list(map(to_key, json_dict.get('keys', [])))
         return cls(**json_dict)
 
 def read_layout(s: str):
@@ -135,14 +149,17 @@ def kle_to_json(s: str):
 def json_to_layout(json_str: str):
     rows = read_layout(json_str)
 
+    # default assignment of keys to rows / columns!
     keys = []
     n_rows = len(rows)
     n_cols = 0
 
-    for row in rows:
+    for i, row in enumerate(rows):
         if n_cols < len(row):
             n_cols = len(row)
-        keys.extend(row)
+        for j, pos in enumerate(row):
+            key = Key(row=i, col=j, position=pos)
+            keys.append(key)
 
     return Layout(rows=n_rows, cols=n_cols, keys=keys)
 
@@ -151,7 +168,6 @@ def kle_to_layout(s: str):
     return json_to_layout(json_str)
 
 def main():
-    # TODO: read string from stdin or from file!
     if len(sys.argv) < 2:
         # read from stdin
         kle_str = sys.stdin.read()
@@ -162,7 +178,7 @@ def main():
             kle_str = f.read()
 
     layout = json_to_layout(kle_str)
-    print(layout.to_json())
+    print(layout.to_json(indent=4))
 
 if __name__ == '__main__':
     main()
