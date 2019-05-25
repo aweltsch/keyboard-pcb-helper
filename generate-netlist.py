@@ -1,3 +1,5 @@
+import sys
+from layout import Layout
 import skidl
 from skidl import Part, Net, generate_netlist
 from os import environ
@@ -47,9 +49,9 @@ def get_key_module(row, col, row_nets, col_nets, key_type='1u'):
     col_net = col_nets[col]
 
     switch = get_switch(key_type=key_type)
-    switch.ref = 'K{},{}'.format(i, j)
+    switch.ref = 'K{},{}'.format(row, col)
     diode = get_diode()
-    diode.ref = 'D{},{}'.format(i, j)
+    diode.ref = 'D{},{}'.format(row, col)
 
     switch[1] += row_net
     switch[2] += diode[1]
@@ -83,16 +85,25 @@ def connect_microcontroller(row_nets, col_nets):
 
 # create nets for all rows & columns
 def main():
-    config = parse_args()
+    if len(sys.argv) < 2:
+        # read from stdin
+        layout_json = sys.stdin.read()
+    else:
+        # read from file
+        f_name = sys.argv[1]
+        with open(f_name) as f:
+            layout_json = f.read()
 
-N_ROWS = 10
-N_COLS = 4
-if __name__ == '__main__':
+    layout = Layout.from_json(layout_json)
     skidl_setup()
-    row_nets = [Net('row{}'.format(i)) for i in range(N_ROWS)]
-    col_nets = [Net('col{}'.format(j)) for j in range(N_COLS)]
-    for i in range(N_ROWS):
-        for j in range(N_COLS):
+    row_nets = [Net('row{}'.format(i)) for i in range(layout.rows)]
+    col_nets = [Net('col{}'.format(j)) for j in range(layout.cols)]
+    for i in range(layout.rows):
+        for j in range(layout.cols):
             get_key_module(i, j, row_nets, col_nets)
+
     connect_microcontroller(row_nets, col_nets)
     generate_netlist()
+
+if __name__ == '__main__':
+    main()
