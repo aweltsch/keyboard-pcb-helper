@@ -3,6 +3,7 @@ from layout import Layout
 import skidl
 from skidl import Part, Net, generate_netlist
 from os import environ
+from utils import get_key_reference, get_diode_reference
 
 KICAD_COMPONENTS = '/usr/share/kicad/library'
 KEYBOARD_COMPONENTS = './components'
@@ -49,9 +50,9 @@ def get_key_module(row, col, row_nets, col_nets, key_type='1u'):
     col_net = col_nets[col]
 
     switch = get_switch(key_type=key_type)
-    switch.ref = 'K{},{}'.format(row, col)
+    switch.ref = get_key_reference(row, col)
     diode = get_diode()
-    diode.ref = 'D{},{}'.format(row, col)
+    diode.ref = get_diode_reference(row, col)
 
     switch[1] += row_net
     switch[2] += diode[1]
@@ -98,9 +99,8 @@ def main():
     skidl_setup()
     row_nets = [Net('row{}'.format(i)) for i in range(layout.rows)]
     col_nets = [Net('col{}'.format(j)) for j in range(layout.cols)]
-    for i in range(layout.rows):
-        for j in range(layout.cols):
-            get_key_module(i, j, row_nets, col_nets)
+    for key in layout.keys:
+            get_key_module(key.row, key.col, row_nets, col_nets)
 
     connect_microcontroller(row_nets, col_nets)
     generate_netlist()
