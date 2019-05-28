@@ -10,10 +10,11 @@ ln -s <path-to-components-library> components
 link keyboard parts
 ln -s <path-to-parts.pretty> parts.pretty
 
-Unfortunately, pcbnew is still python2 only, there seems to be some development in kicad to support python3.
-libraries
+Need python3.7 (due to the use of the @dataclass decorator)
+libraries:
 skidl
 scipy
+
 
 There are several scripts for different phases in the pcb design
 1. Import KLE layout and transfer into easily readable layout format with explicit coordinates for each key.
@@ -34,3 +35,17 @@ WANT:
     - onboard microcontroller
     - stabilizer support -> via components!
     - bluetooth
+
+TODO:
+    - How are we supposed to test this?
+
+Control Script:
+    1. Import KLE json
+    2. Create netlist
+    3. Open Kicad -> Import netlist (can this be done without user interaction?!)
+    4. Position keys
+    5. Open Kicad for positioning of other components
+    6. Routing (Kicad for now)
+    7. Add edge cuts
+    8. Create case files (openscad 2d & 3d, kicad_pcb files)
+    9. Export gerber
