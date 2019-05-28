@@ -14,7 +14,7 @@ def footprint(name, library=None):
         library = PARTS_LIBRARY
     return "{}:{}".format(library, name)
 
-DIODE_COMPONENT = 'D'
+DIODE_COMPONENT = '1N4148'
 DIODE_FOOTPRINT = footprint('Diode-dual')
 
 KEYSWITCH_COMPONENT = '~MX'
@@ -29,7 +29,7 @@ class KeyboardSchematic:
     pass
 
 def get_diode():
-    return Part('Device', DIODE_COMPONENT, footprint=DIODE_FOOTPRINT) # footprint etc.
+    return Part('Diode', DIODE_COMPONENT, footprint=DIODE_FOOTPRINT) # footprint etc.
 
 def get_switch(key_type='1u'):
     # todo -> different footprints for different key types
@@ -54,9 +54,9 @@ def get_key_module(row, col, row_nets, col_nets, key_type='1u'):
     diode = get_diode()
     diode.ref = get_diode_reference(row, col)
 
-    switch[1] += row_net
-    switch[2] += diode[1]
-    diode[2] += col_net
+    switch[1] += col_net
+    switch[2] += diode[2]
+    diode[1] += row_net
 
 def get_micro_controller():
     return Part('keebio', MICROCONTROLLER_COMPONENT, footprint=MICROCONTROLLER_FOOTPRINT)
