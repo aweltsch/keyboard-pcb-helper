@@ -1,10 +1,6 @@
 import pcbnew
 import sys
-from sys import argv
 from math import sin, cos, pi
-import numpy as np
-from scipy.linalg import norm
-from scipy.spatial import ConvexHull
 from layout import Position, Layout, Key, UNIT_SIZE
 from utils import get_key_reference, get_diode_reference
 
@@ -13,16 +9,16 @@ SCALE = 1000000.0
 ANGLE_SCALE = 10
 
 def main():
-    if len(argv) < 2:
-        print("usage: python {} file_name <json_layout>".format(argv[0]))
+    if len(sys.argv) < 2:
+        print("usage: python {} file_name <json_layout>".format(sys.argv[0]))
         sys.exit(1)
     
-    f_name = argv[1]
-    print(argv)
-    if len(argv) == 2:
+    f_name = sys.argv[1]
+    print(sys.argv)
+    if len(sys.argv) == 2:
         json_str = sys.stdin.read()
     else:
-        with open(argv[2]) as f:
+        with open(sys.argv[2]) as f:
             json_str = f.read()
 
     pcb = pcbnew.LoadBoard(f_name)
@@ -63,18 +59,6 @@ def place_diode(pcb: pcbnew.BOARD, key: Key):
     place_component(pcb,
             get_diode_reference(key.row, key.col),
             calc_diode_position(key.position))
-
-def add_edge_cuts(pcb: pcbnew.BOARD):
-    pass
-
-def get_board_hull(pcb: pcbnew.BOARD):
-    pass
-
-def bottom_plate():
-    pass
-
-def top_plate():
-    pass
 
 if __name__ == '__main__':
     main()
