@@ -35,6 +35,8 @@ WANT:
     - onboard microcontroller
     - stabilizer support -> via components!
     - bluetooth
+    - lightweight component positioning
+    - smart / interactive row & column selection
 
 TODO:
     - How are we supposed to test this?
