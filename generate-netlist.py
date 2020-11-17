@@ -89,9 +89,16 @@ def main():
     if len(sys.argv) < 2:
         # read from stdin
         layout_json = sys.stdin.read()
+        netlist_file = keyboard.net
     else:
         # read from file
         f_name = sys.argv[1]
+        # TODO evaluate if this is appropriate behaviour...
+        if f_name.endswith(".json"):
+            netlist_file = f_name.replace(".json", ".net")
+        else:
+            netlist_file = f_name + ".net"
+
         with open(f_name) as f:
             layout_json = f.read()
 
@@ -103,7 +110,7 @@ def main():
             get_key_module(key.row, key.col, row_nets, col_nets)
 
     connect_microcontroller(row_nets, col_nets)
-    generate_netlist()
+    generate_netlist(file_=netlist_file)
 
 if __name__ == '__main__':
     main()
