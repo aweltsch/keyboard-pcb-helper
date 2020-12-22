@@ -1,5 +1,6 @@
 import sys
-from layout import Layout
+from layout import Layout, json_to_layout
+from grid_assignment import min_pin_assignment
 import skidl
 from skidl import Part, Net, generate_netlist
 from os import environ
@@ -89,7 +90,7 @@ def main():
     if len(sys.argv) < 2:
         # read from stdin
         layout_json = sys.stdin.read()
-        netlist_file = keyboard.net
+        netlist_file = "keyboard.net"
     else:
         # read from file
         f_name = sys.argv[1]
@@ -102,7 +103,8 @@ def main():
         with open(f_name) as f:
             layout_json = f.read()
 
-    layout = Layout.from_json(layout_json)
+    original_layout = json_to_layout(layout_json)
+    layout = min_pin_assignment(original_layout)
     skidl_setup()
     row_nets = [Net('row{}'.format(i)) for i in range(layout.rows)]
     col_nets = [Net('col{}'.format(j)) for j in range(layout.cols)]
