@@ -91,20 +91,27 @@ def main():
         # read from stdin
         layout_json = sys.stdin.read()
         netlist_file = "keyboard.net"
+        layout_output = "keyboard.layout"
     else:
         # read from file
         f_name = sys.argv[1]
         # TODO evaluate if this is appropriate behaviour...
+        f_name_root = f_name
         if f_name.endswith(".json"):
-            netlist_file = f_name.replace(".json", ".net")
-        else:
-            netlist_file = f_name + ".net"
+            f_name_root = f_name.replace(".json", "")
+
+        netlist_file = f_name_root + ".net"
+        layout_output = f_name_root + ".layout"
 
         with open(f_name) as f:
             layout_json = f.read()
 
     original_layout = json_to_layout(layout_json)
     layout = min_pin_assignment(original_layout)
+
+    with open(layout_output, 'w') as l_out_file:
+        print(layout.to_json(), file=l_out_file)
+
     skidl_setup()
     row_nets = [Net('row{}'.format(i)) for i in range(layout.rows)]
     col_nets = [Net('col{}'.format(j)) for j in range(layout.cols)]
