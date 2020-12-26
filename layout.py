@@ -4,6 +4,7 @@ import json
 import re
 import sys
 from typing import List
+from math import sin, cos, pi, radians
 
 UNIT_SIZE = 19.05 # TODO decimal
 FIELD_PATTERN = re.compile(r'(\w+):')
@@ -19,7 +20,7 @@ class Position:
     x: float
     y: float
     angle: float
-    width: float
+    width: float # FIXME -> move to Key
 
 
 @dataclass
@@ -54,6 +55,10 @@ class Layout:
         json_dict['keys'] = list(map(to_key, json_dict.get('keys', [])))
         return cls(**json_dict)
 
+def rotate(point, angle, center=(0, 0)):
+    dx, dy = (point[0] - center[0]), (point[1] - center[1])
+    return center[0] + dx * cos(angle) - dy * sin(angle), center[1] + dx * sin(angle) + dy * cos(angle)
+
 def read_layout(s: str):
     """Create a layout from kle raw data string.
 
@@ -85,10 +90,12 @@ def read_layout(s: str):
     rot_y = 0
     angle = 0
 
+    """'r' can only be used on the first key in a row
+    """
     for row in l:
         new_row = []
         i = 0
-        cur_x = 0
+        cur_x = rot_x
         while i < len(row):
             width = 1
             height = 1
@@ -100,11 +107,27 @@ def read_layout(s: str):
                 height = cfg.get('h', height)
                 x_offset = cfg.get('x', x_offset)
                 y_offset = cfg.get('y', y_offset)
+                rot_x = cfg.get('rx', rot_x)
+                rot_y = cfg.get('ry', rot_y)
+                angle = cfg.get('r', angle)
+
+                if 'ry' in cfg:
+                    cur_y = rot_y
+                if 'rx' in cfg:
+                    cur_x = rot_x
                 i += 1
 
-            pos_x = (cur_x + x_offset + width / 2) * UNIT_SIZE
-            pos_y = (cur_y + y_offset + height / 2) * UNIT_SIZE
-            new_row.append(Position(pos_x, pos_y, angle, width))
+            # use rotation center and angle to calculate x & y position
+            start_x = (cur_x + x_offset + width / 2)
+            start_y = (cur_y + y_offset + height / 2)
+
+            angle_in_radians = radians(angle)
+
+            pos_x, pos_y = rotate((start_x, start_y), angle_in_radians, (rot_x, rot_y))
+
+            # unfortunately kle layout measure angles in the wrong direction!
+            # the angles are measured clockwise vs. the standard way (TM) anti-clockwise...
+            new_row.append(Position(pos_x * UNIT_SIZE, pos_y * UNIT_SIZE, -angle_in_radians, width))
             cur_x += x_offset + width
             cur_y += y_offset
 
@@ -113,6 +136,7 @@ def read_layout(s: str):
 
             i += 1
         cur_y += 1
+        cur_x = rot_x
 
         if not isinstance(row, list):
             raise Exception("schema error")
