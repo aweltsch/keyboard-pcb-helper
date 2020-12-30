@@ -1,10 +1,12 @@
 import os
+import pcbnew
 from pykicad.pcb import *
 from pykicad.module import *
 from layout import Position, Layout, json_to_layout, UNIT_SIZE
 from grid_assignment import min_pin_assignment
 import math
 from math import sin, cos
+from place_components import place_key, place_diode, place_component
 
 DIODE_SPACING = UNIT_SIZE / 2
 
@@ -15,19 +17,28 @@ KEYSWITCH_FOOTPRINT = 'Kailh-PG1350-1u-NoLED'
 MICROCONTROLLER_FOOTPRINT = 'ArduinoProMicro'
 DIODE_FOOTPRINT = 'Diode'
 
+# TODO think of a better way to do this... unusable (3 GND, 4 GND, 21 VCC, 22 RST, 23 GND, 24 RAW)
+SPECIAL_PRO_MICRO_PINS = {
+        'GND': [3, 4, 23],
+        'RST': [22],
+        'VCC': [21],
+        'RAW': [24]
+        }
+USABLE_PRO_MICRO_PINS = set(range(1, 25)) - set([pin for sublist in SPECIAL_PRO_MICRO_PINS.values() for pin in sublist])
 
 def connect_pads_to_net(footprint, pad_name, net):
     # NOTE: pad attribute 'name' is "text", i.e. string
     for pad in footprint.pads_by_name(str(pad_name)):
         pad.net = net
 
-def calc_diode_position(key_pos: Position):
-    # pos is the position of the key switch
-    x = key_pos.x + sin(key_pos.angle) * DIODE_SPACING
-    y = key_pos.y + cos(key_pos.angle) * DIODE_SPACING
-    angle = key_pos.angle
-    width = key_pos.width
-    return Position(x=x, y=y, angle=angle, width=width)
+def place_pcb_components(kicad_pcb: pcbnew.BOARD, layout: Layout):
+    for key in layout.keys:
+        place_key(kicad_pcb, key)
+        place_diode(kicad_pcb, key)
+
+def get_usable_pins(microcontroller):
+    return USABLE_PRO_MICRO_PINS
+
 
 def main():
     # TODO configure module search path properly
@@ -57,26 +68,26 @@ def main():
 
         diode = Module.from_library(DEFAULT_LIBRARY, DIODE_FOOTPRINT)
         diode.set_reference("D{},{}".format(key.row, key.col))
-        diode_pos = calc_diode_position(key.position)
-        # FIXME somehow the angle is not applied to the pads inside the diode...
-        # probably every pad needs to be rotated!
-        # this is only an issue for non circular pads, of which there are many...
-        diode.at = [diode_pos.x, diode_pos.y, math.degrees(diode_pos.angle)]
         connect_pads_to_net(diode, 1, row_nets[key.row])
         connect_pads_to_net(diode, 2, switch_diode_net)
 
-        # FIXME: pykicad does not parse modules correctly
-        # for the (model) subattribute, it does not support the 'offset' attribute
-        # this is fixed in xesscorps fork
         keyswitch = Module.from_library(DEFAULT_LIBRARY, KEYSWITCH_FOOTPRINT)
         keyswitch.set_reference("K{},{}".format(key.row, key.col))
-        keyswitch.at = [key.position.x, key.position.y, math.degrees(key.position.angle)]
         connect_pads_to_net(keyswitch, 1, col_nets[key.col])
         connect_pads_to_net(keyswitch, 2, switch_diode_net)
 
         switch_diode_nets.append(switch_diode_net)
         diodes.append(diode)
         switches.append(keyswitch)
+
+    # connect microcontroller
+    microcontroller = Module.from_library(DEFAULT_LIBRARY, MICROCONTROLLER_FOOTPRINT)
+    usable_pins = get_usable_pins(microcontroller)
+    if len(usable_pins) < len(row_nets + col_nets):
+        raise Exception("Not enough pins on microcontroller")
+    for pin, net in zip(usable_pins, row_nets + col_nets):
+        connect_pads_to_net(microcontroller, pin, net)
+
 
     all_nets = [Net('GND')] + row_nets + col_nets + switch_diode_nets
 
@@ -85,9 +96,17 @@ def main():
     pcb.title = 'keyboard'
     pcb.num_nets = len(all_nets)
     pcb.nets += all_nets
-    pcb.modules += diodes + switches
+    pcb.modules += diodes + switches + [microcontroller]
 
     pcb.to_file(f_name.replace(".json", ""))
+
+    # use pcbnew to place the components, it has proper handling of rotation etc...
+    # TODO evaluate usage of pcbnew here
+    # we can properly encapsulate this!
+    kicad_pcb_name = f_name.replace(".json", ".kicad_pcb")
+    kicad_pcb = pcbnew.LoadBoard(kicad_pcb_name)
+    place_pcb_components(kicad_pcb, layout)
+    kicad_pcb.Save(kicad_pcb_name)
 
 
 if __name__ == '__main__':
