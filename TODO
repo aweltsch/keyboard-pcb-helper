@@ -1,0 +1,55 @@
+WANT:
+    - Add additional usb port
+    - onboard microcontroller
+    - stabilizer support -> via components!
+    - bluetooth
+    - lightweight component positioning
+    - smart / interactive row & column selection
+
+TODO:
+    - How are we supposed to test this?
+    - Docker container for easier setup?
+
+At this moment it only supports ProMicro Microcontroller board.
+
+First create netlist for given microcontroller and switch footprint.
+-> need to define usable pins on microcontroller
+Only simple configurations are supported
+Placement of microcontroller and wiring TBD.
+
+link keyboard component libraries
+ln -s <path-to-components-library> components
+
+link keyboard parts
+ln -s <path-to-parts.pretty> parts.pretty
+
+Need python3.7 (due to the use of the @dataclass decorator)
+libraries:
+skidl
+scipy
+
+
+There are several scripts for different phases in the pcb design
+1. Import KLE layout and transfer into easily readable layout format with explicit coordinates for each key.
+   Assign each key to a row and column (TODO for nontrivial cases!, also minimize rows + cols to minimize pins)
+   Export layout to json -> see dto format specification
+2. Generate schematic & netlist from layout. TODO: Add support for other components, split keyboards, leds, etc.
+3. Generate PCB and place keyswitches & diodes according to layout.
+4. Manual placement of additional components (microcontroller etc.)
+5. Routing (maybe autorouting with additional steps, rows & columns should be easy to "pre-route")
+6. Edge cuts and export component placement to json format (?)
+7. Generate case files (openscad 3D & 2D)
+
+Guideline: Optimize for common case. Special cases will have to be handled manually anyway.
+In particular schematic & switch placement are important to be automated.
+
+Control Script:
+    1. Import KLE json
+    2. Create netlist
+    3. Open Kicad -> Import netlist (can this be done without user interaction?!)
+    4. Position keys
+    5. Open Kicad for positioning of other components
+    6. Routing (Kicad for now)
+    7. Add edge cuts
+    8. Create case files (openscad 2d & 3d, kicad_pcb files)
+    9. Export gerber
