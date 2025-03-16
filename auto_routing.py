@@ -3,6 +3,8 @@ from kigadgets.board import Board
 from kigadgets.pad import PadShape, PadType
 import pcbnew
 import math
+from dataclasses import dataclass
+from typing import Set
 
 DEFAULT_GRID = 0.5 # one point every 0.5mm
 MINIMUM_CLEARANCE = 0.3
@@ -340,6 +342,55 @@ def add_routes_to_board(board, net_routes):
                     layer = src[-1]
                 board.add_track([to_coords(src[:2]), to_coords(dest[:2])], layer=layer)
     return board
+
+@dataclass(frozen=True)
+class GridNode:
+    x: int
+    y: int
+
+@dataclass(frozen=True)
+class PadNode:
+    x: float
+    y: float
+    grid_nodes: Set[GridNode]
+
+@dataclass(frozen=True)
+class TrackConnection:
+    src: GridNode | PadNode
+    dest: GridNode | PadNode
+    weight: float
+    layer: str
+
+@dataclass(frozen=True)
+class ViaConnection:
+    src: GridNode | PadNode
+    dest: GridNode | PadNode
+    weight: float
+    layer: str
+
+assert GridNode(3, 2) == GridNode(3, 2)
+assert hash(GridNode(3, 2)) == hash(GridNode(3, 2))
+
+class AutoRouter():
+    def __init__(self, board_name):
+        self.board_name = board_name
+        self.output_name = f"routed-{board_name}"
+        self.board = Board(pcbnew.LoadBoard(board_name))
+        self.x_mm = 260
+        self.y_mm = 120
+        self.graph = get_grid_graph(x_mm, y_mm)
+        self.pad_nodes = remove_keep_out(self.graph, self.board)
+        self.nets = get_subnets(self.board)
+
+    def run_auto_routing(self):
+        net_routes = self.route_with_a_star()
+        self.add_routes_to_board(net_routes)
+
+    def add_routes_to_board(self):
+        pass
+
+    def save(self):
+        self.board.save(output_name)
 
 # clearer structure
 # there are three types of edges
