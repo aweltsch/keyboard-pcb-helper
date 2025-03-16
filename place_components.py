@@ -12,7 +12,7 @@ def main():
     if len(sys.argv) < 2:
         print("usage: python {} file_name <json_layout>".format(sys.argv[0]))
         sys.exit(1)
-    
+
     f_name = sys.argv[1]
     print(sys.argv)
     if len(sys.argv) == 2:
@@ -32,11 +32,11 @@ def main():
     pcb.Save("out.kicad_pcb")
 
 def to_pcbnew_position(pos: Position):
-    return pcbnew.wxPoint(pos.x * SCALE, pos.y * SCALE)
+    return pcbnew.VECTOR2I(int(pos.x * SCALE), int(pos.y * SCALE))
 
 def to_pcbnew_angle(angle: float):
     # angle in radians
-    return ANGLE_SCALE * angle / (2 * pi) * 360
+    return pcbnew.EDA_ANGLE(ANGLE_SCALE * angle / (2 * pi) * 360)
 
 def calc_diode_position(key_pos: Position):
     # pos is the position of the key switch
@@ -48,7 +48,7 @@ def calc_diode_position(key_pos: Position):
 
 # new PCB: pcbnew.BOARD()
 def place_component(pcb: pcbnew.BOARD, ref: str, pos: Position):
-    module = pcb.FindModuleByReference(ref)
+    module = pcb.FindFootprintByReference(ref)
     module.SetPosition(to_pcbnew_position(pos))
     module.SetOrientation(to_pcbnew_angle(pos.angle))
 

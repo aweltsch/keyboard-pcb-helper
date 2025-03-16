@@ -13,6 +13,7 @@ DIODE_SPACING = UNIT_SIZE / 2
 # NOTE:
 # SYMLINK Keebio-Parts.pretty in current directory
 DEFAULT_LIBRARY = "Keebio-Parts"
+# somehow pykicad can not deal with (model ... )
 KEYSWITCH_FOOTPRINT = 'Kailh-PG1350-1u-NoLED'
 MICROCONTROLLER_FOOTPRINT = 'ArduinoProMicro'
 DIODE_FOOTPRINT = 'Diode'
@@ -62,6 +63,7 @@ def main():
     switch_diode_nets = []
     diodes = []
     switches = []
+    Module.from_library("Keebio-Parts", DIODE_FOOTPRINT)
 
     for key in layout.keys:
         switch_diode_net = Net('switch_diode_{}_{}'.format(key.row, key.col))

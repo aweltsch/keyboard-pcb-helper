@@ -2,12 +2,12 @@ import sys
 from layout import Layout, json_to_layout
 from grid_assignment import min_pin_assignment
 import skidl
-from skidl import Part, Net, generate_netlist
+from skidl import Part, Net, generate_netlist, generate_pcb
 from os import environ
 from utils import get_key_reference, get_diode_reference
 
-KICAD_COMPONENTS = '/usr/share/kicad/library'
-KEYBOARD_COMPONENTS = './components'
+KICAD_COMPONENTS = '/usr/share/kicad/symbols'
+KEYBOARD_COMPONENTS = './components/keebio-components'
 PARTS_LIBRARY = 'Keebio-Parts'
 
 def footprint(name, library=None):
@@ -18,7 +18,7 @@ def footprint(name, library=None):
 DIODE_COMPONENT = '1N4148'
 DIODE_FOOTPRINT = footprint('Diode-dual')
 
-KEYSWITCH_COMPONENT = '~MX'
+KEYSWITCH_COMPONENT = 'MX'
 KEYSWITCH_FOOTPRINT = footprint('MX-Alps-Choc-1U-NoLED')
 
 MICROCONTROLLER_COMPONENT = 'ProMicro'
@@ -91,6 +91,7 @@ def main():
         # read from stdin
         layout_json = sys.stdin.read()
         netlist_file = "keyboard.net"
+        pcb_file = "keyboard.kicad_pcb"
         layout_output = "keyboard.layout"
     else:
         # read from file
@@ -102,6 +103,7 @@ def main():
 
         netlist_file = f_name_root + ".net"
         layout_output = f_name_root + ".layout"
+        pcb_file = f_name_root + ".kicad_pcb"
 
         with open(f_name) as f:
             layout_json = f.read()
@@ -116,10 +118,11 @@ def main():
     row_nets = [Net('row{}'.format(i)) for i in range(layout.rows)]
     col_nets = [Net('col{}'.format(j)) for j in range(layout.cols)]
     for key in layout.keys:
-            get_key_module(key.row, key.col, row_nets, col_nets)
+        get_key_module(key.row, key.col, row_nets, col_nets)
 
     connect_microcontroller(row_nets, col_nets)
     generate_netlist(file_=netlist_file)
+    generate_pcb(file_=pcb_file, fp_libs=['./components', './components/Keebio-Parts.pretty'])
 
 if __name__ == '__main__':
     main()

@@ -4,11 +4,16 @@ A tool to create pcbs from [keyboard layout editor](http://www.keyboard-layout-e
 # Set up
 You need to have Python 3 and KiCAD installed on your system.
 ```
-python -m venv venv --system-site-packages
+python -m venv venv --system-site-packages # this is needed to have pcbnew available
 source venv/bin/activate
-pip install skidl pykicad
-git clone 
+pip install skidl pykicad kigadgets networkx
+# git clone https://github.com/keebio/Keebio-Parts.pretty
+# TODO: somehow migrate the components to the new format
+# the components contain .lib files whereas kicad now uses kicad_sym s-expressions
+# git clone https://github.com/keebio/keebio-components keebio-components.kicad_sym
 ```
+
+TODO: kicad setup
 
 # Usage
 TODO!
@@ -17,10 +22,10 @@ Make sure that you have the virtual environment activated, if not do so via `sou
 1. Download the keyboard layout as json file from the keyboard-layout-editor website to a file, e.g. keyboard-layout.json.
 2. Run the generate-netlist script: `python generate-netlist.py keyboard-layout.json`
 This will create two new files
-    
-3. 
+
+3.
 4. Start KiCAD, create a new project and import the netlist generate in step 3.
-5. 
+5.
 
 
 # Autorouting idea

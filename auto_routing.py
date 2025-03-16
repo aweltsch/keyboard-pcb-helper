@@ -54,7 +54,7 @@ def get_grid_graph(width_mm, height_mm, discretization=DEFAULT_GRID):
 # FIXME is the minimum clearance good here?
 def calculate_circle_keep_out(pad, radius):
     assert pad.size.x == pad.size.y
-    min_x, max_x = int((pad.position.x - radius) / DEFAULT_GRID), math.ceil((pad.position.x + radius) / DEFAULT_GRID) 
+    min_x, max_x = int((pad.position.x - radius) / DEFAULT_GRID), math.ceil((pad.position.x + radius) / DEFAULT_GRID)
     min_y, max_y = int((pad.position.y - radius) / DEFAULT_GRID), math.ceil((pad.position.y + radius) / DEFAULT_GRID)
 
     keep_outs = []
@@ -477,15 +477,18 @@ class AutoRouter():
 # vias, connecting the same grid point with a via
 
 if __name__ == '__main__':
+    from sys import argv
+    if len(argv) != 2:
+        raise Exception(f"{argv[0]} <pcb_file>")
     g = get_grid_graph(260, 120)
     validate_graph(g)
-    board_name = "keyboard-layout.kicad_pcb"
+    board_name = argv[1]
     board = Board(pcbnew.LoadBoard(board_name))
     # board.add_track(coords, layer='F.Cu', width=None)
     # board.add_via(coord, layer_pair=['F.Cu', 'B.Cu'], width=None)
     pad_nodes = remove_keep_outs(g, board)
     nets = get_subnets(board)
-    net_routes = route_board(g, nets, pad_nodes)
-    # net_routes = route_with_a_star(g, nets, pad_nodes)
+    # net_routes = route_board(g, nets, pad_nodes)
+    net_routes = route_with_a_star(g, nets, pad_nodes)
     add_routes_to_board(board, net_routes)
-    board.save("routed-layout.kicad_pcb")
+    board.save(f"routed-{board_name}")
