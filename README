@@ -6,7 +6,7 @@ You need to have Python 3 and KiCAD installed on your system.
 ```
 python -m venv venv --system-site-packages
 source venv/bin/activate
-pip install skidl
+pip install skidl pykicad
 git clone 
 ```
 
@@ -22,3 +22,20 @@ This will create two new files
 4. Start KiCAD, create a new project and import the netlist generate in step 3.
 5. 
 
+
+# Autorouting idea
+A keyboard PCB is a somehow simpler version of more general PCBs
+The placement has alrady been fixed by design beforehand (kle)
+There are usually "just" different nets for rows & columns which are close and
+usually well-aligned via physical placement. The underlying topology is close to a grid
+Most imporatantly wee need to make sure that different nets don't cross and the connection to
+the microcontroller can successfully be routed
+
+# Autorouting TODO
+- [ ] Find a way to conventiently iterate through footprints & keep out areas
+- [ ] plot the grid graph
+- [ ] generate the segments & vias fromthe graph
+- [ ] make sure pads and segments intersect properly
+
+Use kibot to check design rules, ..., and to generate the gerber files.
+https://github.com/INTI-CMNB/kibot

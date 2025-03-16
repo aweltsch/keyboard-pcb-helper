@@ -5,7 +5,7 @@ import pcbnew
 import math
 
 DEFAULT_GRID = 0.5 # one point every 0.5mm
-MINIMUM_CLEARANCE = 0.2
+MINIMUM_CLEARANCE = 0.3
 COPPER_LAYERS = ['F.Cu', 'B.Cu']
 VIA_WEIGHT = 5
 
@@ -17,12 +17,34 @@ def get_grid_graph(width_mm, height_mm, discretization=DEFAULT_GRID):
     n = int(width_mm / discretization)
     m = int(height_mm / discretization)
     x = nx.Graph()
-    offsets = [(k, l) for k in [-1, 0, 1] for l in [-1, 0, 1] if k != 0 or l != 0]
+    # offsets = [(k, l) for k in [-1, 0, 1] for l in [-1, 0, 1]]
+    offsets = [(-1, 1), (0, 1), (1, 1), (1, 0), (0, 0)]
+    # offsets = [-1, 1]
     for i in range(n):
         for j in range(m):
-            edges = [((i, j, layer), (i + k, j + l, layer), 1) for (k, l) in offsets if 0 <= (i + k) < n and 0 <= (j + l) < m for layer in COPPER_LAYERS]
-            edges.append(((i, j, COPPER_LAYERS[0]), (i, j, COPPER_LAYERS[1]), VIA_WEIGHT))
+            start = (i, j)
+            edges = []
+            for (k, l) in offsets:
+                end = (i + k, j + l)
+                if i + k < 0 or i + k >= n or j + l < 0 or j + l >= m:
+                    continue
+                if start == end:
+                    edges.append((start + (COPPER_LAYERS[0],), end + (COPPER_LAYERS[1],), VIA_WEIGHT))
+                else:
+                    edges.extend((start + (layer,), end + (layer,), dist(start, end)) for layer in COPPER_LAYERS)
+
+                # ((i, j, layer), (i + k, j + l, layer), 1) for (k, l) in offsets if 0 <= (i + k) < n and 0 <= (j + l) < m for layer in COPPER_LAYERS]
+            # edges = [((i, j, layer), (i + k, j, layer), 1) for k in offsets for layer in COPPER_LAYERS if 0 <= i + k < n]
+            # edges.extend([((i, j, layer), (i, j + k, layer), 1) for k in offsets for layer in COPPER_LAYERS if 0 <= j + k < m])
             x.add_weighted_edges_from(edges)
+
+    # verify that internal connections are set up correctly
+    for node in x.nodes:
+        neighbors = list(x.neighbors(node))
+        if 1 <= node[0] < n - 1 and 1 <= node[1] < m - 1:
+            assert len(neighbors) == 9, (node, neighbors)
+        for other in neighbors:
+            assert int(dist(node, other)) in [0, 1, 2], (node, other, dist(node, other))
     return x
 
 # TODO rigorous tests
@@ -67,10 +89,17 @@ def apply_keep_out(graph, pad, rotation_deg):
     if pad_type == PadType.Through:
         pad_node = (pad.position.x / DEFAULT_GRID, pad.position.y / DEFAULT_GRID)
         graph.add_node(pad_node)
+        identified_nodes = []
         for layer in COPPER_LAYERS:
             for k in keep_outs:
-                nx.identified_nodes(graph, pad_node, k + (layer, ), self_loops=False, copy=False)
+                node = k + (layer, )
+                nx.identified_nodes(graph, pad_node, node, self_loops=False, copy=False)
                 assert pad_node in graph.nodes
+                identified_nodes.append(node)
+        if not pad.net_name:
+            graph.remove_node(pad_node)
+        else:
+            return (pad_node, identified_nodes)
     elif pad_type == PadType.NPTH:
         # NONE-PLATED through hole, remove from graph
         for p in keep_outs:
@@ -91,11 +120,15 @@ def remove_keep_outs(graph, board):
     # we can only use an edge if the node is not part of any net or if the node is part of the same net
     # on iteration we remove "used nodes from the graph, will probably achieve the same
     # TODO involve pad clearance
+    pad_nodes = {}
     for fp in board.footprints:
         for p in fp.pads:
-            apply_keep_out(graph, p, fp.orientation)
+            identified_nodes = apply_keep_out(graph, p, fp.orientation)
+            if identified_nodes:
+                pad_nodes[identified_nodes[0]] = identified_nodes[1]
     for keepout in board.keepouts:
         raise Exception("keep out not implemented")
+    return pad_nodes
 
 def route_subnet(g, subnet_name, nets):
     cur_net = nets[subnet_name]
@@ -123,11 +156,52 @@ def get_subnets(board):
                 cur_net.append((p.position.x / DEFAULT_GRID, p.position.y / DEFAULT_GRID))
                 nets[p.net_name] = cur_net
     return nets
+def coord_diff(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-def route_board(graph, nets):
+def get_diagonal_edges(graph, edge, pad_nodes, node_to_pad):
+    a, b = edge
+    if a[0] > b[0]:
+        a, b = b, a
+    forbidden_edges = set()
+    if len(a) == 2 or len(b) == 2:
+        if len(a) < len(b):
+            a, b = b, a
+        assert len(a) == 3, f"can not have edge between pads {a}, {b}"
+        assert len(b) == 2 and b in pad_nodes
+        for other in filter(lambda x: coord_diff(a, x) == 2 and a[2] == x[2], pad_nodes[b]):
+            if a[0] > other[0]:
+                a, other = other, a
+            if other[0] - a[0] == 1:
+                assert a[0] < other[0]
+                assert coord_diff(a, other) == 2
+                anti_edge = ((a[0], other[1], a[2]), (other[0], a[1], other[2]))
+                forbidden_edges.add(anti_edge)
+    elif a[:2] != b[:2]:
+        assert a[-1] == b[-1]
+        assert a[0] != b[0]
+        assert a[0] < b[0]
+        anti_start = (a[0], b[1], a[2])
+        anti_end = (b[0], a[1], b[2])
+        anti_edge = (anti_start, anti_end)
+        # assert anti_start not in node_to_pad
+        # assert anti_end not in node_to_pad
+        if anti_start in node_to_pad:
+            anti_edge = (node_to_pad[anti_start], anti_end)
+        elif anti_end in node_to_pad:
+            anti_edge = (anti_start, node_to_pad[anti_end])
+        forbidden_edges.add(anti_edge)
+
+    return forbidden_edges
+
+def route_board(graph, nets, pad_nodes):
+    node_to_pad = {}
+    for pad, nodes in pad_nodes.items():
+        for node in nodes:
+            node_to_pad[node] = pad
+
     orig_neighbors = {}
     for net in sorted(nets):
-        print("routing net", net)
         for p in nets[net]:
             assert p not in orig_neighbors, f"pad in multiple different subnets ({net}: {p})"
             orig_neighbors[p] = list(graph.neighbors(p))
@@ -139,11 +213,36 @@ def route_board(graph, nets):
         # we need to make sure that we don't use any "pads" from the other subnets in the tree!
         print("routing net", net)
         for p in nets[net]:
-            graph.add_weighted_edges_from((p, n, 1) for n in orig_neighbors[p] if n in graph.nodes)
+            # TODO when re-adding edges we need to watch out
+            for n in orig_neighbors[p]:
+                if not n in graph.nodes:
+                    continue
+                assert p != n
+                edge = (p, n)
+                graph.add_weighted_edges_from([edge + (1,)])
         tree = route_subnet(g, net, nets)
         net_routes.append(list(tree.edges))
+
+        # remove anti edges of the path since we don't want to cross diagonals!
+        forbidden_edges = set(tree.edges)
+
+        for edge in tree.edges:
+            (a, b) = edge
+            if a[0] > b[0]:
+                a, b = b, a
+            diff = abs(a[0] - b[0]) + abs(a[1] - b[1])
+            assert len(a) == 2 or len(b) == 2 or diff <= 2, edge
+            forbidden_edges.add((a, b))
+            if diff == 1:
+                assert len(a) == 3 and len(b) == 3
+                continue
+            forbidden_edges.update(get_diagonal_edges(graph, edge, pad_nodes, node_to_pad))
+        graph.remove_edges_from(forbidden_edges)
         graph.remove_nodes_from(tree.nodes)
     return net_routes
+
+def route_with_a_star():
+    pass
 
 def plot_graph(g):
     import matplotlib.pyplot as plt
@@ -158,19 +257,9 @@ def plot_graph(g):
 def to_coords(a):
     return (a[0] * DEFAULT_GRID, a[1] * DEFAULT_GRID)
 
-if __name__ == '__main__':
-    g = get_grid_graph(260, 120)
-    validate_graph(g)
-    board_name = "keyboard-layout.kicad_pcb"
-    board = Board(pcbnew.LoadBoard(board_name))
-    # board.add_track(coords, layer='F.Cu', width=None)
-    # board.add_via(coord, layer_pair=['F.Cu', 'B.Cu'], width=None)
-    remove_keep_outs(g, board)
-    nets = get_subnets(board)
-    net_routes = route_board(g, nets)
+def add_routes_to_board(board, net_routes):
     for route in net_routes:
         for (src, dest) in route:
-            print(src, dest)
             if src[:2] == dest[:2]:
                 # add via
                 assert src[-1] != dest[-1]
@@ -186,5 +275,18 @@ if __name__ == '__main__':
                     assert src[-1] == dest[-1]
                     layer = src[-1]
                 board.add_track([to_coords(src[:2]), to_coords(dest[:2])], layer=layer)
+    return board
+
+if __name__ == '__main__':
+    g = get_grid_graph(260, 120)
+    validate_graph(g)
+    board_name = "keyboard-layout.kicad_pcb"
+    board = Board(pcbnew.LoadBoard(board_name))
+    # board.add_track(coords, layer='F.Cu', width=None)
+    # board.add_via(coord, layer_pair=['F.Cu', 'B.Cu'], width=None)
+    pad_nodes = remove_keep_outs(g, board)
+    nets = get_subnets(board)
+    net_routes = route_board(g, nets, pad_nodes)
+    add_routes_to_board(board, net_routes)
     board.save("routed-layout.kicad_pcb")
     plot_graph(g)
