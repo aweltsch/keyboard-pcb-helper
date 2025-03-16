@@ -10,7 +10,7 @@ DEFAULT_GRID = 0.5 # one point every 0.5mm
 MINIMUM_CLEARANCE = 0.3
 COPPER_LAYERS = ['F.Cu', 'B.Cu']
 VIA_DIAMETER = 0.8
-VIA_WEIGHT = 5
+VIA_WEIGHT = 50
 
 def dist(a, b):
     return ((a[0] - b[0])**2 + (a[1] - b[1])**2)**0.5
@@ -148,9 +148,6 @@ def route_subnet(g, subnet_name, nets):
     tree = nx.algorithms.approximation.steiner_tree(g, cur_net)
     return tree
 
-def remove_used_edges():
-    pass
-
 def validate_graph(g):
     for e in g.edges:
         # if e[0][-1] == e[1][-1]:
@@ -262,31 +259,35 @@ def is_proper_grid_edge(e):
 def is_grid_node(n):
     return len(n) == 3 and n[2] in COPPER_LAYERS
 
-def apply_keep_out_from_path():
-    pass
+def is_crossing(e, f):
+    return False
+
+def get_layer(e):
+    src, dest = e
+    assert len(src) > 2 or len(dest) > 2, "pad connection edge {e}"
+    assert not is_via_edge(e)
+    if len(dest) > len(src):
+        src, dest = dest, src
+    assert len(src) == 3
+    return src[2]
+
+
+def edges_are_touching(e, f):
+    if is_via_edge(e) or is_via_edge(f):
+        return True
+    else: # only track edges
+        same_layer = get_layer(e) == get_layer(f)
+        return same_layer and is_crossing(e, f)
 
 def remove_invalid_nodes_and_edges(graph, route):
-    nodes_to_remove = set()
     edges_to_remove = set()
-    offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
     for edge in route:
-        if is_via_edge(edge):
-            assert is_grid_node(edge[0]) and is_grid_node(edge[1])
-            nodes_to_remove.update([(e[0] + i, e[1] + j, e[2]) for e in edge for (i, j) in offsets])
-        else:
-            assert is_track_edge(edge)
-            if is_pad_connecting_edge(edge):
-                pass
-            else:
-                assert is_proper_grid_edge(edge)
-                if coord_diff(edge[0], edge[1]) == 1:
-                    # no via in neighbors
-                    pass
-                else:
-                    assert coord_diff(edge[0], edge[1]) == 2
-
+        src, dest = edge
+        neighbors = list(graph.neighbors(src)) + list(graph.neighbors(dest))
+        for other_edge in graph.edges(neighbors):
+            if edges_are_touching(edge, other_edge):
+                edges_to_remove.add(other_edge)
     graph.remove_edges_from(edges_to_remove)
-    graph.remove_nodes_from(nodes_to_remove)
 
 def route_with_a_star(graph, nets, pad_nodes):
     node_to_pad = {}
@@ -326,7 +327,6 @@ def route_with_a_star(graph, nets, pad_nodes):
             cur = target
 
 
-        apply_keep_out_from_path()
         nodes = set()
         total_path = []
         for path in paths:
@@ -347,9 +347,9 @@ def route_with_a_star(graph, nets, pad_nodes):
                 assert len(a) == 3 and len(b) == 3
                 continue
             forbidden_edges.update(get_diagonal_edges(graph, edge, pad_nodes, node_to_pad))
+        remove_invalid_nodes_and_edges(graph, total_path)
         graph.remove_edges_from(forbidden_edges)
         graph.remove_nodes_from(nodes)
-        remove_invalid_nodes_and_edges(graph, total_path)
         net_routes.append(total_path)
     return net_routes
 
