@@ -9,6 +9,7 @@ from typing import Set
 DEFAULT_GRID = 0.5 # one point every 0.5mm
 MINIMUM_CLEARANCE = 0.3
 COPPER_LAYERS = ['F.Cu', 'B.Cu']
+VIA_DIAMETER = 0.8
 VIA_WEIGHT = 5
 
 def dist(a, b):
@@ -111,6 +112,15 @@ def apply_keep_out(graph, pad, rotation_deg):
     else:
         raise Exception("not implemented for anything other than Through Hole and Npth pads")
 
+def is_via_edge(e):
+    return len(e[0]) == 3 and len(e[1]) == 3 and e[0][:2] == e[1][:2]
+
+def is_track_edge(e):
+    return len(e[0]) == 2 or len(e[1]) == 2 or e[0][2] == e[1][2]
+
+def get_keep_out(pad):
+    radius = pad.size.x
+    return radius + MINIMUM_CLEARANCE
 
 def remove_keep_outs(graph, board):
     # probably I need a planning instance
@@ -243,8 +253,40 @@ def route_board(graph, nets, pad_nodes):
         graph.remove_nodes_from(tree.nodes)
     return net_routes
 
+def is_pad_connecting_edge(e):
+    return len(e[0]) == 2 or len(e[1]) == 2
+
+def is_proper_grid_edge(e):
+    return len(e[0]) == 3 and len(e[1]) == 3
+
+def is_grid_node(n):
+    return len(n) == 3 and n[2] in COPPER_LAYERS
+
 def apply_keep_out_from_path():
     pass
+
+def remove_invalid_nodes_and_edges(graph, route):
+    nodes_to_remove = set()
+    edges_to_remove = set()
+    offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    for edge in route:
+        if is_via_edge(edge):
+            assert is_grid_node(edge[0]) and is_grid_node(edge[1])
+            nodes_to_remove.update([(e[0] + i, e[1] + j, e[2]) for e in edge for (i, j) in offsets])
+        else:
+            assert is_track_edge(edge)
+            if is_pad_connecting_edge(edge):
+                pass
+            else:
+                assert is_proper_grid_edge(edge)
+                if coord_diff(edge[0], edge[1]) == 1:
+                    # no via in neighbors
+                    pass
+                else:
+                    assert coord_diff(edge[0], edge[1]) == 2
+
+    graph.remove_edges_from(edges_to_remove)
+    graph.remove_nodes_from(nodes_to_remove)
 
 def route_with_a_star(graph, nets, pad_nodes):
     node_to_pad = {}
@@ -307,6 +349,7 @@ def route_with_a_star(graph, nets, pad_nodes):
             forbidden_edges.update(get_diagonal_edges(graph, edge, pad_nodes, node_to_pad))
         graph.remove_edges_from(forbidden_edges)
         graph.remove_nodes_from(nodes)
+        remove_invalid_nodes_and_edges(graph, total_path)
         net_routes.append(total_path)
     return net_routes
 
@@ -347,6 +390,7 @@ def add_routes_to_board(board, net_routes):
 class GridNode:
     x: int
     y: int
+    layer: str
 
 @dataclass(frozen=True)
 class PadNode:
@@ -359,26 +403,60 @@ class TrackConnection:
     src: GridNode | PadNode
     dest: GridNode | PadNode
     weight: float
-    layer: str
 
 @dataclass(frozen=True)
 class ViaConnection:
     src: GridNode | PadNode
     dest: GridNode | PadNode
     weight: float
-    layer: str
 
-assert GridNode(3, 2) == GridNode(3, 2)
-assert hash(GridNode(3, 2)) == hash(GridNode(3, 2))
+assert GridNode(3, 2, 'F.Cu') == GridNode(3, 2, 'F.Cu')
+assert hash(GridNode(3, 2, 'F.Cu')) == hash(GridNode(3, 2, 'F.Cu'))
+
+# TODO implement simple autorouting from the PCB + ratsnest
+def get_grid_graph(width_mm, height_mm, discretization=DEFAULT_GRID):
+    n = int(width_mm / discretization)
+    m = int(height_mm / discretization)
+    grid = nx.Graph()
+    offsets = [(-1, 1), (0, 1), (1, 1), (1, 0), (0, 0)]
+    for i in range(n):
+        for j in range(m):
+            start = (i, j)
+            edges = []
+            for (k, l) in offsets:
+                end = (i + k, j + l)
+                if i + k < 0 or i + k >= n or j + l < 0 or j + l >= m:
+                    continue
+                if start == end:
+                    edges.append(((i, j, COPPER_LAYERS[0]), (i + k, j + l, COPPER_LAYERS[1]), VIA_WEIGHT))
+                else:
+                    edges.extend((start + (layer,), end + (layer,), coord_diff(start, end)) for layer in COPPER_LAYERS)
+
+                # ((i, j, layer), (i + k, j + l, layer), 1) for (k, l) in offsets if 0 <= (i + k) < n and 0 <= (j + l) < m for layer in COPPER_LAYERS]
+            # edges = [((i, j, layer), (i + k, j, layer), 1) for k in offsets for layer in COPPER_LAYERS if 0 <= i + k < n]
+            # edges.extend([((i, j, layer), (i, j + k, layer), 1) for k in offsets for layer in COPPER_LAYERS if 0 <= j + k < m])
+            grid.add_weighted_edges_from(edges)
+
+    # verify that internal connections are set up correctly
+    for node in grid.nodes:
+        neighbors = list(grid.neighbors(node))
+        if 1 <= node[0] < n - 1 and 1 <= node[1] < m - 1:
+            assert len(neighbors) == 9, (node, neighbors)
+        for other in neighbors:
+            assert int(dist(node, other)) in [0, 1, 2], (node, other, dist(node, other))
+    return grid
+
+def create_grid_graph():
+    pass
 
 class AutoRouter():
     def __init__(self, board_name):
         self.board_name = board_name
         self.output_name = f"routed-{board_name}"
         self.board = Board(pcbnew.LoadBoard(board_name))
-        self.x_mm = 260
-        self.y_mm = 120
-        self.graph = get_grid_graph(x_mm, y_mm)
+        self.x_mm = 260 # TODO
+        self.y_mm = 120 # TODO
+        self.graph = create_grid_graph(x_mm, y_mm)
         self.pad_nodes = remove_keep_out(self.graph, self.board)
         self.nets = get_subnets(self.board)
 
@@ -407,7 +485,7 @@ if __name__ == '__main__':
     # board.add_via(coord, layer_pair=['F.Cu', 'B.Cu'], width=None)
     pad_nodes = remove_keep_outs(g, board)
     nets = get_subnets(board)
-    #net_routes = route_board(g, nets, pad_nodes)
-    net_routes = route_with_a_star(g, nets, pad_nodes)
+    net_routes = route_board(g, nets, pad_nodes)
+    # net_routes = route_with_a_star(g, nets, pad_nodes)
     add_routes_to_board(board, net_routes)
     board.save("routed-layout.kicad_pcb")
