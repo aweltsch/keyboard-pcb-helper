@@ -31,7 +31,7 @@ def get_grid_graph(width_mm, height_mm, discretization=DEFAULT_GRID):
                 if start == end:
                     edges.append((start + (COPPER_LAYERS[0],), end + (COPPER_LAYERS[1],), VIA_WEIGHT))
                 else:
-                    edges.extend((start + (layer,), end + (layer,), dist(start, end)) for layer in COPPER_LAYERS)
+                    edges.extend((start + (layer,), end + (layer,), coord_diff(start, end)) for layer in COPPER_LAYERS)
 
                 # ((i, j, layer), (i + k, j + l, layer), 1) for (k, l) in offsets if 0 <= (i + k) < n and 0 <= (j + l) < m for layer in COPPER_LAYERS]
             # edges = [((i, j, layer), (i + k, j, layer), 1) for k in offsets for layer in COPPER_LAYERS if 0 <= i + k < n]
@@ -241,8 +241,72 @@ def route_board(graph, nets, pad_nodes):
         graph.remove_nodes_from(tree.nodes)
     return net_routes
 
-def route_with_a_star():
+def apply_keep_out_from_path():
     pass
+
+def route_with_a_star(graph, nets, pad_nodes):
+    node_to_pad = {}
+    for pad, nodes in pad_nodes.items():
+        for node in nodes:
+            node_to_pad[node] = pad
+
+    orig_neighbors = {}
+    for net in sorted(nets):
+        for p in nets[net]:
+            assert p not in orig_neighbors, f"pad in multiple different subnets ({net}: {p})"
+            orig_neighbors[p] = list(graph.neighbors(p))
+    for p in orig_neighbors:
+        graph.remove_node(p)
+
+    net_routes = []
+    for net in sorted(nets):
+        paths = []
+        # we need to make sure that we don't use any "pads" from the other subnets in the tree!
+        for p in nets[net]:
+            # TODO when re-adding edges we need to watch out
+            for n in orig_neighbors[p]:
+                if not n in graph.nodes:
+                    continue
+                assert p != n
+                edge = (p, n)
+                graph.add_weighted_edges_from([edge + (1,)])
+        print("routing net", net)
+        stack = sorted(nets[net])
+        conn_nodes = set()
+        cur = stack.pop()
+        while stack:
+            stack.sort(key = lambda x: dist(cur, x), reverse=True)
+            target = stack.pop()
+            path = nx.astar_path(graph, cur, target, heuristic=dist)
+            paths.append(path)
+            cur = target
+
+
+        apply_keep_out_from_path()
+        nodes = set()
+        total_path = []
+        for path in paths:
+            for a, b in zip(path, path[1:]):
+                total_path.append((a, b))
+                nodes.add(a)
+                nodes.add(b)
+
+        forbidden_edges = set(total_path)
+        for edge in total_path:
+            (a, b) = edge
+            if a[0] > b[0]:
+                a, b = b, a
+            diff = abs(a[0] - b[0]) + abs(a[1] - b[1])
+            assert len(a) == 2 or len(b) == 2 or diff <= 2, edge
+            forbidden_edges.add((a, b))
+            if diff == 1:
+                assert len(a) == 3 and len(b) == 3
+                continue
+            forbidden_edges.update(get_diagonal_edges(graph, edge, pad_nodes, node_to_pad))
+        graph.remove_edges_from(forbidden_edges)
+        graph.remove_nodes_from(nodes)
+        net_routes.append(total_path)
+    return net_routes
 
 def plot_graph(g):
     import matplotlib.pyplot as plt
@@ -277,6 +341,12 @@ def add_routes_to_board(board, net_routes):
                 board.add_track([to_coords(src[:2]), to_coords(dest[:2])], layer=layer)
     return board
 
+# clearer structure
+# there are three types of edges
+# front tracks, between grid points on the front layer 'F.Cu'
+# back tracks, between grid points on the back layer 'B.Cu'
+# vias, connecting the same grid point with a via
+
 if __name__ == '__main__':
     g = get_grid_graph(260, 120)
     validate_graph(g)
@@ -286,7 +356,7 @@ if __name__ == '__main__':
     # board.add_via(coord, layer_pair=['F.Cu', 'B.Cu'], width=None)
     pad_nodes = remove_keep_outs(g, board)
     nets = get_subnets(board)
-    net_routes = route_board(g, nets, pad_nodes)
+    #net_routes = route_board(g, nets, pad_nodes)
+    net_routes = route_with_a_star(g, nets, pad_nodes)
     add_routes_to_board(board, net_routes)
     board.save("routed-layout.kicad_pcb")
-    plot_graph(g)
