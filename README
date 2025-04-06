@@ -39,8 +39,12 @@ the microcontroller can successfully be routed
 # Autorouting TODO
 - [ ] Find a way to conventiently iterate through footprints & keep out areas
 - [ ] plot the grid graph
-- [ ] generate the segments & vias fromthe graph
+- [x] generate the segments & vias fromthe graph
 - [ ] make sure pads and segments intersect properly
+
+## Problems to solve
+#### clearance & crossing segments
+#### something something helo frien
 
 Use kibot to check design rules, ..., and to generate the gerber files.
 https://github.com/INTI-CMNB/kibot
