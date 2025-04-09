@@ -3,14 +3,15 @@ from kigadgets.board import Board
 from kigadgets.pad import PadShape, PadType
 import pcbnew
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Set
 
-DEFAULT_GRID = 0.5 # one point every 0.5mm
+#DEFAULT_GRID = 0.5 # one point every 0.5mm
+DEFAULT_GRID = 0.5
 MINIMUM_CLEARANCE = 0.3
 COPPER_LAYERS = ['F.Cu', 'B.Cu']
 VIA_DIAMETER = 0.8
-VIA_WEIGHT = 50
+VIA_WEIGHT = 20
 
 def dist(a, b):
     return ((a[0] - b[0])**2 + (a[1] - b[1])**2)**0.5
@@ -140,6 +141,8 @@ def remove_keep_outs(graph, board):
                 pad_nodes[identified_nodes[0]] = identified_nodes[1]
     for keepout in board.keepouts:
         raise Exception("keep out not implemented")
+
+    assert all(p in g.nodes for p in pad_nodes)
     return pad_nodes
 
 def route_subnet(g, subnet_name, nets):
@@ -176,15 +179,25 @@ def get_diagonal_edges(graph, edge, pad_nodes, node_to_pad):
     if len(a) == 2 or len(b) == 2:
         if len(a) < len(b):
             a, b = b, a
-        assert len(a) == 3, f"can not have edge between pads {a}, {b}"
+        assert len(a) == 3, f"can not have edge between pads {a}, {b}" # TODO this is a severe restriction possibly
         assert len(b) == 2 and b in pad_nodes
-        for other in filter(lambda x: coord_diff(a, x) == 2 and a[2] == x[2], pad_nodes[b]):
+
+        a_orig = a
+        for other in filter(lambda x: coord_diff(a_orig, x) == 2 and a[2] == x[2], pad_nodes[b]):
+            a = a_orig
             if a[0] > other[0]:
                 a, other = other, a
+            # TODO: this thing here needs some thorough unit testing!!!
             if other[0] - a[0] == 1:
                 assert a[0] < other[0]
-                assert coord_diff(a, other) == 2
-                anti_edge = ((a[0], other[1], a[2]), (other[0], a[1], other[2]))
+                assert coord_diff(a, other) == 2, (a, other)
+                anti_start = (a[0], other[1], a[2])
+                anti_end = (other[0], a[1], other[2])
+                if anti_start in node_to_pad:
+                    anti_start = node_to_pad[anti_start]
+                if anti_end in node_to_pad:
+                    anti_end = node_to_pad[anti_end]
+                anti_edge = (anti_start, anti_end)
                 forbidden_edges.add(anti_edge)
     elif a[:2] != b[:2]:
         assert a[-1] == b[-1]
@@ -203,52 +216,6 @@ def get_diagonal_edges(graph, edge, pad_nodes, node_to_pad):
 
     return forbidden_edges
 
-def route_board(graph, nets, pad_nodes):
-    node_to_pad = {}
-    for pad, nodes in pad_nodes.items():
-        for node in nodes:
-            node_to_pad[node] = pad
-
-    orig_neighbors = {}
-    for net in sorted(nets):
-        for p in nets[net]:
-            assert p not in orig_neighbors, f"pad in multiple different subnets ({net}: {p})"
-            orig_neighbors[p] = list(graph.neighbors(p))
-    for p in orig_neighbors:
-        graph.remove_node(p)
-
-    net_routes = []
-    for net in sorted(nets):
-        # we need to make sure that we don't use any "pads" from the other subnets in the tree!
-        print("routing net", net)
-        for p in nets[net]:
-            # TODO when re-adding edges we need to watch out
-            for n in orig_neighbors[p]:
-                if not n in graph.nodes:
-                    continue
-                assert p != n
-                edge = (p, n)
-                graph.add_weighted_edges_from([edge + (1,)])
-        tree = route_subnet(g, net, nets)
-        net_routes.append(list(tree.edges))
-
-        # remove anti edges of the path since we don't want to cross diagonals!
-        forbidden_edges = set(tree.edges)
-
-        for edge in tree.edges:
-            (a, b) = edge
-            if a[0] > b[0]:
-                a, b = b, a
-            diff = abs(a[0] - b[0]) + abs(a[1] - b[1])
-            assert len(a) == 2 or len(b) == 2 or diff <= 2, edge
-            forbidden_edges.add((a, b))
-            if diff == 1:
-                assert len(a) == 3 and len(b) == 3
-                continue
-            forbidden_edges.update(get_diagonal_edges(graph, edge, pad_nodes, node_to_pad))
-        graph.remove_edges_from(forbidden_edges)
-        graph.remove_nodes_from(tree.nodes)
-    return net_routes
 
 def is_pad_connecting_edge(e):
     return len(e[0]) == 2 or len(e[1]) == 2
@@ -304,6 +271,7 @@ def route_with_a_star(graph, nets, pad_nodes):
         graph.remove_node(p)
 
     net_routes = []
+    invalid_edges = set()
     for net in sorted(nets):
         paths = []
         # we need to make sure that we don't use any "pads" from the other subnets in the tree!
@@ -314,7 +282,12 @@ def route_with_a_star(graph, nets, pad_nodes):
                     continue
                 assert p != n
                 edge = (p, n)
-                graph.add_weighted_edges_from([edge + (1,)])
+                alt_edge = (n, p)
+                if edge not in invalid_edges and alt_edge not in invalid_edges:
+                    # TODO -> this needs to be smarter
+                    # no edge should be added that has been forbidden
+                    # what makes it harder
+                    graph.add_weighted_edges_from([edge + (1,)])
         print("routing net", net)
         stack = sorted(nets[net])
         conn_nodes = set()
@@ -338,18 +311,24 @@ def route_with_a_star(graph, nets, pad_nodes):
         forbidden_edges = set(total_path)
         for edge in total_path:
             (a, b) = edge
+
             if a[0] > b[0]:
                 a, b = b, a
             diff = abs(a[0] - b[0]) + abs(a[1] - b[1])
             assert len(a) == 2 or len(b) == 2 or diff <= 2, edge
+            if (a, b) in g.edges:
+                assert (b, a) in g.edges
             forbidden_edges.add((a, b))
             if diff == 1:
                 assert len(a) == 3 and len(b) == 3
                 continue
             forbidden_edges.update(get_diagonal_edges(graph, edge, pad_nodes, node_to_pad))
+
+        invalid_edges.update(forbidden_edges)
         remove_invalid_nodes_and_edges(graph, total_path)
         graph.remove_edges_from(forbidden_edges)
         graph.remove_nodes_from(nodes)
+
         net_routes.append(total_path)
     return net_routes
 
@@ -394,9 +373,10 @@ class GridNode:
 
 @dataclass(frozen=True)
 class PadNode:
-    x: float
-    y: float
-    grid_nodes: Set[GridNode]
+    id: str
+    x: float = field(hash=False)
+    y: float = field(hash=False)
+    grid_nodes: Set[GridNode] = field(hash=False)
 
 @dataclass(frozen=True)
 class TrackConnection:
@@ -487,8 +467,10 @@ if __name__ == '__main__':
     # board.add_track(coords, layer='F.Cu', width=None)
     # board.add_via(coord, layer_pair=['F.Cu', 'B.Cu'], width=None)
     pad_nodes = remove_keep_outs(g, board)
+    for p in pad_nodes:
+        assert p in g.nodes
+        print(g.edges(p))
     nets = get_subnets(board)
-    # net_routes = route_board(g, nets, pad_nodes)
     net_routes = route_with_a_star(g, nets, pad_nodes)
     add_routes_to_board(board, net_routes)
     board.save(f"routed-{board_name}")
