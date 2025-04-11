@@ -50,7 +50,7 @@ def calc_diode_position(key_pos: Position):
 def place_component(pcb: pcbnew.BOARD, ref: str, pos: Position):
     module = pcb.FindFootprintByReference(ref)
     module.SetPosition(to_pcbnew_position(pos))
-    module.SetOrientation(to_pcbnew_angle(pos.angle))
+    # module.SetOrientation(to_pcbnew_angle(pos.angle))
 
 def place_key(pcb: pcbnew.BOARD, key: Key):
     place_component(pcb, get_key_reference(key.row, key.col), key.position)
